@@ -2,7 +2,7 @@
 using Flooty
 using Flooty: chatCompletion, OllamaMessage
 using Sockets
-using JSON
+using JSON3
 
 failures = String[]
 function check(name, ok, detail = "")
@@ -29,7 +29,7 @@ stopServer = Ref(false)
             m === nothing || (len = parse(Int, m.captures[1]))
         end
         bodySeen[] = String(read(sock, len))
-        payload = JSON.json(Dict("choices" => [Dict("message" => Dict("role" => "assistant",
+        payload = JSON3.write(Dict("choices" => [Dict("message" => Dict("role" => "assistant",
                                                                      "content" => "OK"))]))
         write(sock, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" *
                     "Content-Length: $(sizeof(payload))\r\n\r\n" * payload)
@@ -44,7 +44,7 @@ try
     reply = chatCompletion("http://127.0.0.1:$port/v1", "fake", [OllamaMessage(role="user", content="hi")];
                            maxTokens=1234, timeoutS=5.0)
     check("the completion succeeds", reply == "OK", reply)
-    body = JSON.parse(bodySeen[])
+    body = JSON3.read(bodySeen[])
     check("the request carries max_tokens=1234", get(body, "max_tokens", nothing) == 1234,
           bodySeen[])
 finally

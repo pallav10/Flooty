@@ -349,7 +349,7 @@ end
 
 # ---- persistence: the family's store, not a private file format -------------
 # Transcripts persist through FlootyPersistence's backend (JSON3 + StructTypes;
-# the app's own wire/action JSON now goes through JSON.jl)
+# the app's own wire/action JSON also goes through JSON3)
 # under `~/.flooty/conversations` — the same backend, DTO split and root the
 # family uses for sessions. A SIBLING directory rather than the shared
 # `~/.flooty/sessions`: the backend keys records by id alone, so two record types

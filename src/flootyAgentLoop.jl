@@ -190,7 +190,7 @@ an `action` key. Weak models wrap the payload in prose (“the output {INTENT_42
 shows…”), so giving up on the first non-parsing candidate made every such
 reply “unparseable” forever. Instead: scan candidate objects left-to-right,
 skip the ones that don't parse / lack `action`, and only fail when exhausted.
-Returns a JSON.Object or nothing.
+Returns JSON3.Object or nothing.
 
 Near-miss REPAIR: weak models emit pretty-printed objects whose string
 values contain LITERAL newlines/tabs (strictly invalid JSON — observed live:
@@ -393,7 +393,7 @@ end
 
 """Parse one balanced `{…}` candidate as an action object: strictly first,
 then through escalating REPAIR TIERS (control chars → inner-quote escape).
-Returns JSON.Object or nothing."""
+Returns JSON3.Object or nothing."""
 # Commands a bare reply may legitimately be (used by recoverBareCommand).
 const SHELL_COMMAND_RE = Regex("^(cd|ls|pwd|echo|cat|sed|awk|grep|rg|find|head|tail|" *
     "git|julia|juliaup|mkdir|rmdir|rm|cp|mv|touch|chmod|ln|make|bat|batcat|less|" *
@@ -466,6 +466,15 @@ function _fixInvalidJsonEscapes(s::String)
     return String(take!(out))
 end
 
+function _validateActionJsonStrings(value::Union{JSON3.Object,JSON3.Array})
+    for child in values(value)
+        if child isa JSON3.Object || child isa JSON3.Array
+            _validateActionJsonStrings(child)
+        end
+    end
+    return nothing
+end
+
 function _tryParseActionCandidate(candidate::String)
     repaired = _repairJsonCandidate(candidate)
     fixed = _fixInvalidJsonEscapes(repaired)
@@ -476,9 +485,11 @@ function _tryParseActionCandidate(candidate::String)
     escaped = _escapeInnerQuotes(candidate)
     for text in (candidate, repaired, fixed, escaped,
                  _fixInvalidJsonEscapes(escaped), _escapeInnerQuotes(fixed))
-        # JSON.jl parses EAGERLY: a bad escape throws here, inside the try.
+        # Parse inside the try so malformed model output reaches the repair tiers.
         parsed = try
-            obj = JSON.parse(text)
+            obj = JSON3.read(text)
+            # Force JSON3's lazy strings inside the repair boundary, including nested fields.
+            _validateActionJsonStrings(obj)
             # `decision` is the AMBIENT MONITOR's protocol ({decision:observe|insight|…});
             # requiring `action` silently dropped every monitor decision.
             (haskey(obj, :action) || haskey(obj, :decision)) ? obj : nothing
@@ -1969,7 +1980,7 @@ function runAgentLoop!(sess::ReplSession, task::AbstractString;
                 if truncated !== nothing
                     loopSay(ctx, "[turn $(ctx.result.turns + 1)] recovered a truncated " *
                                  "send: " * first(truncated, 120))
-                    action = JSON.parse(JSON.json(Dict("action" => "send",
+                    action = JSON3.read(JSON3.write(Dict("action" => "send",
                                                          "code" => truncated)))
                 end
             end
@@ -1978,7 +1989,7 @@ function runAgentLoop!(sess::ReplSession, task::AbstractString;
                 if bare !== nothing
                     loopSay(ctx, "[turn $(ctx.result.turns + 1)] recovered a bare " *
                                  "command as send: " * first(bare, 120))
-                    action = JSON.parse(JSON.json(Dict("action" => "send",
+                    action = JSON3.read(JSON3.write(Dict("action" => "send",
                                                          "code" => bare)))
                 end
             end
@@ -2045,7 +2056,7 @@ function runAgentLoop!(sess::ReplSession, task::AbstractString;
             kind = getstr(action, "action", "")
             ctx.result.turns += 1
             # Non-send repeat detection (see prevActionSig comment).
-            actionSig = replace(string(JSON.json(action)), r"\s+" => "")
+            actionSig = replace(string(JSON3.write(action)), r"\s+" => "")
             # SEND REPEAT SAFETY: the monitor note can be present and a weak
             # driver can still replay the same send forever (observed: 400
             # identical turns). Let two occurrences through (a legitimate

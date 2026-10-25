@@ -128,8 +128,8 @@ end
 
 One non-streaming chat round-trip against an OpenAI-compatible endpoint.
 If `apiKey` is non-empty, an `Authorization: Bearer <key>` header is sent.
-Messages go through `requestMessages` (never `JSON.json` of the structs, which
-omits an empty `content` and produces an invalid request).
+Messages go through `requestMessages` (not serialization of message structs,
+which may omit empty `content` and produce an invalid request).
 Returns the assistant message content string; throws on HTTP/transport
 failure so callers decide retry policy.
 """
@@ -148,14 +148,14 @@ function chatCompletion(baseUrl::AbstractString, model::AbstractString,
         "stream" => false,
     )
     jsonMode && (bodyDict["response_format"] = Dict("type" => "json_object"))
-    body = JSON.json(bodyDict)
+    body = JSON3.write(bodyDict)
     headers = ["Content-Type" => "application/json"]
     if !isempty(apiKey)
         push!(headers, "Authorization" => "Bearer " * String(apiKey))
     end
     resp = HTTP.post(url, headers, body;
                      readtimeout = Int(timeoutS * 1000), retry = false)
-    parsed = JSON.parse(String(resp.body))
+    parsed = JSON3.read(String(resp.body))
     message = parsed.choices[1].message
     content = message.content === nothing ? "" : String(message.content)
     return withReasoning(content, providerReasoning(message))
@@ -215,9 +215,9 @@ or when `refresh` is set). Never blocks: an empty list on the first call is fine
 the UI simply populates a moment later.
 """
 function refreshAgentModels!(cfg::AgentModelConfig = AGENT_CONFIG[])
+    refreshConnectedSubscriptionModels!()
     @async begin
         list = listAgentModels(cfg)
-        isempty(list) && return nothing
         lock(MODEL_LIST_LOCK) do
             MODEL_LIST_CACHE[] = list
             MODEL_LIST_AT[] = time()
@@ -229,11 +229,10 @@ end
 
 function availableAgentModels(; refresh::Bool = false)::Vector{String}
     cached, age = lock(MODEL_LIST_LOCK) do
-        (copy(MODEL_LIST_CACHE[]), isempty(MODEL_LIST_CACHE[]) ? Inf :
-                                  time() - MODEL_LIST_AT[])
+        (copy(MODEL_LIST_CACHE[]), MODEL_LIST_AT[] == 0 ? Inf : time() - MODEL_LIST_AT[])
     end
-    (refresh || isempty(cached) || age > MODEL_LIST_TTL) && refreshAgentModels!()
-    return cached
+    (refresh || age > MODEL_LIST_TTL) && refreshAgentModels!()
+    return sort!(unique!(vcat(cached, availableSubscriptionModels())))
 end
 
 # ---- per-tab models ---------------------------------------------------------
@@ -255,7 +254,7 @@ function setSessionMonitorModel!(sess, model::AbstractString)::AgentModelConfig
     base = sessionModelConfig(sess)
     cfg = AgentModelConfig(baseUrl = base.baseUrl, actorModel = base.actorModel,
                            monitorModel = String(model), apiKey = base.apiKey,
-                           reasoningField = base.reasoningField)
+                           reasoningField = base.reasoningField, maxOutputTokens = base.maxOutputTokens)
     lock(MODEL_BY_SESSION_LOCK) do
         MODEL_BY_SESSION[sess] = cfg
     end
@@ -267,7 +266,7 @@ function setSessionModel!(sess, model::AbstractString)::AgentModelConfig
     base = sessionModelConfig(sess)
     cfg = AgentModelConfig(baseUrl = base.baseUrl, actorModel = String(model),
                            monitorModel = base.monitorModel, apiKey = base.apiKey,
-                           reasoningField = base.reasoningField)
+                           reasoningField = base.reasoningField, maxOutputTokens = base.maxOutputTokens)
     lock(MODEL_BY_SESSION_LOCK) do
         MODEL_BY_SESSION[sess] = cfg
     end
@@ -296,7 +295,7 @@ function listAgentModels(cfg::AgentModelConfig = defaultAgentModelConfig())::Vec
         push!(headers, "Authorization" => "Bearer " * cfg.apiKey)
     try
         resp = HTTP.get(url, headers; readtimeout = 15_000, retry = false)
-        parsed = JSON.parse(String(resp.body))
+        parsed = JSON3.read(String(resp.body))
         ids = String[]
         for m in get(parsed, :data, ())
             id = get(m, :id, nothing)
@@ -403,7 +402,7 @@ function streamCompletion(baseUrl::AbstractString, model::AbstractString,
         "stream" => true,
     )
     jsonMode && (bodyDict["response_format"] = Dict("type" => "json_object"))
-    body = JSON.json(bodyDict)
+    body = JSON3.write(bodyDict)
     headers = ["Content-Type" => "application/json", "Accept" => "text/event-stream"]
     isempty(apiKey) || push!(headers, "Authorization" => "Bearer " * String(apiKey))
     # NATIVE OLLAMA FIRST: its /api/chat streams `message.thinking` deltas and its
@@ -528,7 +527,7 @@ function consumeSSEFrames(io::IO, onThinking;
         isempty(payload) && continue
         payload == "[DONE]" && break
         obj = try
-            JSON.parse(payload)
+            JSON3.read(payload)
         catch err
             continue
         end
@@ -577,6 +576,14 @@ makeCompleteFn(cfg::AgentModelConfig, model::AbstractString;
                jsonMode::Bool = false,
                onThinking = nothing, stream::Bool = true) =
     messages -> begin
+        selected = subscriptionModel(model)
+        if selected !== nothing
+            # shortcut: subscription replies are buffered; stream adapters when live thinking is required.
+            return subscriptionComplete(subscriptionKind(selected.provider),
+                subscriptionCredential(selected.provider), selected.model, messages;
+                temperature = temperature, maxTokens = maxTokens, onThinking = onThinking,
+                jsonMode = jsonMode, timeoutS = timeoutS)
+        end
         if stream
             try
                 return streamCompletion(cfg.baseUrl, model, messages;

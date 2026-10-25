@@ -17,7 +17,7 @@ using Flooty: consumeSSEFrames, streamCompletion, makeCompleteFn, AgentModelConf
     AgentThinkingEvent, streamThinking!, flushThinking!, LoopContext
 using FlootyPTYLayer: startReplSession, closeSession!
 using FlootyStreams: OllamaMessage
-import JSON
+import JSON3
 
 failures = String[]
 function check(name::String, ok::Bool, detail = "")
@@ -26,7 +26,7 @@ function check(name::String, ok::Bool, detail = "")
     ok || push!(failures, name)
 end
 
-sseFrame(delta) = "data: " * JSON.json(Dict("choices" => [Dict("delta" => delta)])) * "\n"
+sseFrame(delta) = "data: " * JSON3.write(Dict("choices" => [Dict("delta" => delta)])) * "\n"
 
 # ---- 1: every reasoning delta reaches the sink, in order, content separate ---
 body = IOBuffer(join([
@@ -55,7 +55,7 @@ check("a delta is never counted twice (field dedupe)",
       reasoningText == "step ONE step TWO ", reasoningText)
 
 # ---- 2: a non-SSE body reports "no frames" so the caller can fall back -------
-plain = IOBuffer(JSON.json(Dict("choices" => [Dict("message" =>
+plain = IOBuffer(JSON3.write(Dict("choices" => [Dict("message" =>
     Dict("role" => "assistant", "content" => "one shot"))])))
 got = String[]
 check("a plain JSON body is not mistaken for a stream",

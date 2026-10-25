@@ -26,15 +26,27 @@ message vocabulary).
 
 ## Installation
 
-Not in a registry yet — install it the way the rest of the family is installed,
-from the checkout. Its dependencies are `[sources]` path dependencies
-(`../FlootyAbstract`, `../FlootyBase`, `../FlootyPTYLayer`, `../FlootyPersistence`,
-`../FlootySessions`, `../FlootyStreams`), so those checkouts must sit next to it.
+Not in a registry yet — install from the checkout with Julia 1.12. Required
+`[sources]` dependencies must sit beside it: `FlootyAbstract`, `FlootyBase`,
+`FlootyPTYLayer`, `FlootyPersistence`, and `FlootyStreams`; the terminal layer
+also needs `FlootyREPLBridge` and `ShadowTerm`. Webviews and WebIO resolve from
+the registry; no machine-specific WebIO checkout is needed.
 
 ```julia
 using Pkg
 Pkg.develop(path = "/path/to/Flooty")
 ```
+
+From the parent directory:
+
+```sh
+julia --startup-file=no --project=Flooty -e 'using Pkg; Pkg.instantiate()'
+julia --startup-file=no --project=Flooty Flooty/agentUi.jl 0
+```
+
+`FlootySessions` is optional and loaded only by `activateReplTool!`, the legacy
+REPL-tool bridge. Install its genuine package and dependencies in the active
+environment before calling that API; the desktop app does not require it.
 
 ### As an app (Julia ≥ 1.12)
 
@@ -68,6 +80,38 @@ because the app does not own pixels it has no reason to know about.
 
 (Keep `~/.julia/bin` on `PATH`; `Pkg.Apps.status()` warns if it is missing.)
 
+## Terminal themes
+
+The status-bar **Theme** selector applies a palette to every open terminal,
+the window chrome, chat, and code editors without restarting sessions. Bundled
+themes are `Flooty Dark` (default), `Flooty Light`, and `Dracula`. The previous
+wallpaper and grain overlay are no longer used.
+
+Selection is saved in `~/.flooty/theme.conf`. This file accepts Ghostty-style
+settings; color overrides take precedence over the selected theme:
+
+```ini
+theme = Flooty Dark
+background = #15171e
+foreground = #e4e6ed
+palette = 4=#6196eb
+```
+
+To import a Ghostty color theme, copy its file to `~/.flooty/themes/My Theme`
+and choose `My Theme` in the selector. Supported keys are `background`,
+`foreground`, `cursor-color`, `cursor-text`, `selection-background`,
+`selection-foreground`, and repeated `palette = 0..15=#rrggbb` entries.
+Colors require six hexadecimal digits, with an optional `#`; quoted values
+and whole-line comments are accepted. Unrelated Ghostty settings are ignored.
+User theme files override bundled themes with the same name.
+
+**Reload** re-reads the config and theme files after manual edits. Invalid
+startup configuration shows an error and uses the bundled default without
+rewriting the config; failed selections leave the current palette unchanged.
+`FLOOTY_THEME_CONFIG` and `FLOOTY_THEMES_DIR` override the two locations.
+Julia callers can use `FlootyPTYLayer.ThemeManager.themeState()`,
+`loadTheme(name)`, `availableThemes()`, and `selectTheme!(name)`.
+
 ## Reading files
 
 The driver reads through the terminal, like a person would:
@@ -84,14 +128,48 @@ package when available: `using TerminalPager; pager(read("src/app.jl", String))`
 
 ## Per-tab models
 
-Each live session can pin its own model: the status-bar picker addresses the
-ACTIVE TAB (its terminal id travels with `flootyModels`/`flootySetModel`), so two
-terminals can run different models at once. The process default stays the fallback
-(headless runs, tabs that never chose). `agentModelState(id)` /
-`selectAgentModel(name, id)` are the API; the loop, its context window and the
-monitor read `sessionModelConfig(sess)`, and the tab's transcript is tagged with
-the model that produced it. The endpoint's model list is cached and refreshed in a
-background task — a binding never blocks the window on HTTP.
+Each chat, terminal, or browser session has two independent status-bar pickers:
+
+- **Agent:** answers requests and runs terminal tasks. A change applies to the
+  next request or task; a task already running keeps its original model.
+- **Monitor:** watches progress and provides background feedback. A change
+  applies to the next background check.
+
+Open **Model help** beside the pickers for these roles and timing rules.
+Selections affect only the active session, not other sessions or process defaults.
+`agentModelState(id)`, `selectAgentModel(name, id)`, and
+`selectMonitorModel(name, id)` address the session; `sessionModelConfig(sess)`
+supplies its configuration. Model discovery runs in background tasks.
+
+## Slash actions and subscription login
+
+Type `/` in the agent composer to see available actions. Arrow keys select,
+Enter runs an action, Tab completes its name, and Escape dismisses the menu.
+Commands are local UI actions, not terminal input or model prompts. `/login`
+is the initial action; its catalog and dispatcher live in `src/slashCommands.jl`.
+
+`/login` opens a private subscription dialog:
+
+- **GitHub Copilot:** confirm your GitHub host, then approve the displayed device
+  code in your browser. Use `github.com` for normal personal/Business accounts, or
+  your enterprise sign-in host (for example `company.ghe.com`) for GHE accounts.
+  A hostname or HTTPS root URL is accepted; an empty field uses `github.com`.
+  Enterprise login uses the Copilot CLI OAuth client, which your organization
+  must permit. The saved host scopes token refresh, model discovery, and inference;
+  switching hosts does not reuse another tenant's credentials or model catalog.
+- **Claude Code:** requires the official `claude` executable on PATH. Flooty runs
+  its unmodified login and tool-disabled inference; Claude Code owns credentials
+  and refresh. Flooty does not collect or route Claude subscription tokens.
+- **xAI / Grok:** open the consent page, then paste the full redirect URL into the
+  dialog, even if the loopback page fails to load. Account entitlement and quotas
+  are determined by the provider, not an assumed subscription tier.
+
+After connecting, choose **Use model** to select a model for the active session.
+Subscription IDs are qualified as `github-copilot/<model>`,
+`claude-code/<alias>`, or `xai/<model>`; unqualified models retain the configured
+OpenAI-compatible endpoint. Copilot/xAI credentials and rotated refresh tokens
+are stored in macOS Keychain, separately from transcripts and preferences.
+Only connect accounts whose provider and organization policies permit this use.
 
 ## Streaming thinking
 
@@ -104,6 +182,9 @@ records the FULL thinking once at the end of the turn, so the chat animates and
 the transcript stays one message. Non-streaming bodies fall back to the one-shot
 path automatically. Note: the configured `beam:cloud` emits its deltas in one
 burst, so the animation only shows with models that stream.
+Subscription adapters currently buffer replies and deliver thinking after the
+response completes, rather than streaming it live.
+
 
 ## Context window
 
@@ -402,29 +483,39 @@ julia --project=. test/splitChatProbe.jl         # chat renders before/during/af
 julia --project=. test/agentViewProbe.jl         # exactly what the LLM receives as the pane
 julia --project=. test/wireMessageProbe.jl       # request wire form (content never null)
 julia --project=. test/modelPickerProbe.jl       # model picker wiring (opens a window)
+julia --project=. test/slashCommandsProbe.jl     # local actions, session routing, refresh/cancellation races
+julia --project=. test/subscriptionCopilotProbe.jl
+julia --project=. test/subscriptionClaudeProbe.jl
+julia --project=. test/subscriptionXaiProbe.jl    # synthetic provider boundaries; no live account login
+julia --project=. test/copilotEnterpriseSystemProbe.jl # native E2E with a local provider fixture
 ```
 
-## macOS app (`FlootyAgent.app`)
+## macOS app (`Flooty.app`)
 
 `flooty` is a terminal command. To get a real Mac application — Dock icon,
 app name in the menu bar, Finder/Spotlight launch, double-clickable — build the
 bundle:
 
 ```bash
-scripts/buildMacApp.sh                 # -> ~/Applications/FlootyAgent.app
+scripts/buildMacApp.sh                 # -> ~/Applications/Flooty.app
 scripts/buildMacApp.sh --out /Applications   # system-wide (may need sudo)
 scripts/buildMacApp.sh --no-sign       # skip the ad-hoc codesign
 scripts/buildMacApp.sh --icon assets/flooty-icon.svg
 ```
 
+Launch with `open "$HOME/Applications/Flooty.app"` for the Flooty Dock name and
+Peek puppy icon. Direct Julia launches retain Julia's identity. Rendering SVG
+icons requires `swift` from Apple's command line tools.
+
 What it does:
 
-* renders `assets/flooty-icon.svg` (QuickLook → PNG), builds every iconset size and
-  packs `FlootyAgent.icns` with `iconutil`;
-* writes `Contents/Info.plist` (`dev.flooty.agent`, "Flooty Agent", developer-tools
+* renders the Peek puppy in `assets/flooty-icon.svg` through Swift/AppKit,
+  preserving transparency, builds every iconset size, and packs `Flooty.icns`
+  with `iconutil`;
+* writes `Contents/Info.plist` (`dev.flooty.agent`, "Flooty", developer-tools
   category, HiDPI) and a launcher that reproduces the `Pkg.Apps` shim environment:
   `JULIA_DEPOT_PATH`, `JULIA_LOAD_PATH=$depot/dev/Flooty`, `cd $HOME`;
-* redirects Julia's output to `~/Library/Logs/FlootyAgent.log` and sets
+* redirects Julia's output to `~/Library/Logs/Flooty.log` and sets
   `FLOOTY_APP_BUNDLE=1`, which makes the app flush stdout/stderr once a second (a
   file redirect is block-buffered and would otherwise stay empty);
 * ad-hoc signs the bundle (`codesign --sign -`) so macOS treats it as one app.
@@ -441,7 +532,7 @@ Notes:
   either sign with an identity (`scripts/buildMacApp.sh --identity "Developer ID
   Application: …"` or an Apple Development cert) and grant it under System
   Settings → Privacy & Security → Local Network, or launch from Terminal
-  (`~/Applications/FlootyAgent.app/Contents/MacOS/FlootyAgent`, or `flooty`)
+  (`~/Applications/Flooty.app/Contents/MacOS/Flooty`, or `flooty`)
   where the panes inherit Terminal's grant.
 * To share it with other Macs you need a Developer ID signature and notarization
   (`xcrun notarytool submit … --wait`, then `xcrun stapler staple`); an ad-hoc
@@ -452,9 +543,9 @@ Notes:
 
   ```julia
   using PackageCompiler
-  create_app("Flooty", "FlootyAgent.app";
-             executables = ["FlootyAgent" => "main"],   # Flooty.@main
-             app_name = "Flooty Agent",
+  create_app("Flooty", "Flooty.app";
+             executables = ["Flooty" => "main"],   # Flooty.@main
+             app_name = "Flooty",
              icon = "assets/flooty-icon.icns",
              force = true)
   ```

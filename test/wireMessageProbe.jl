@@ -21,7 +21,7 @@
 #
 # Run: julia --startup-file=no --project=. test/wireMessageProbe.jl
 import Flooty
-using JSON
+using JSON3
 import FlootyStreams
 using FlootyStreams: OllamaMessage
 
@@ -88,8 +88,8 @@ check("tool_name/tool_call_id survive the wire form",
       withCall[2]["tool_name"] == "repl" && withCall[2]["tool_call_id"] == "call_1")
 
 # The body the endpoint actually receives.
-body = JSON.json(Dict("model" => "m", "messages" => wire, "stream" => false))
-parsed = JSON.parse(body)
+body = JSON3.write(Dict("model" => "m", "messages" => wire, "stream" => false))
+parsed = JSON3.read(body)
 check("serialized body has a content key on every message",
       all(m -> haskey(m, :content) && m.content !== nothing, parsed.messages),
       [m for m in parsed.messages if !haskey(m, :content)])

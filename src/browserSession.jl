@@ -22,8 +22,8 @@ function parseBrowserReply(reply::AbstractString)
     act = extractActionJson(raw)
     if act === nothing
         try
-            obj = JSON.parse(strip(raw))
-            obj isa JSON.Object && (act = obj)
+            obj = JSON3.read(strip(raw))
+            obj isa JSON3.Object && (act = obj)
         catch
         end
     end
@@ -91,12 +91,14 @@ function browserTurnFor!(sess::BrowserSession, wv, text::AbstractString,
     noteUserMessage!(sess, text)
     conv = conversationFor(sess.id)
     recordTask!(conv, text)
+    cfg = sessionModelConfig(sess)
+    conv.model = cfg.actorModel
     setSessionStatus!(sess, "thinking")
     @async begin
         try
             fn = BROWSER_COMPLETE[]
             if fn === nothing
-                fn = makeCompleteFn(AGENT_CONFIG[], AGENT_CONFIG[].actorModel;
+                fn = makeCompleteFn(cfg, cfg.actorModel;
                     onThinking = chunk -> (wv === nothing ? nothing :
                         pushAgentEventToWindow(wv,
                             AgentThinkingEvent(sess.id, String(chunk)))))
@@ -109,7 +111,7 @@ function browserTurnFor!(sess::BrowserSession, wv, text::AbstractString,
             append!(msgs, conversationContext(conv))
             push!(msgs, OllamaMessage(role = "user", content = "TASK: " * text))
             ctxLimit = try
-                contextLengthFor(AGENT_CONFIG[].actorModel)
+                contextLengthFor(cfg.actorModel)
             catch
                 0
             end

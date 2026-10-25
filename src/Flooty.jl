@@ -2,8 +2,10 @@ module Flooty
 
 using Dates
 using UUIDs
+using SHA
+using Base64
+using Random
 using FlootyPTYLayer
-import FlootySessions
 import FlootyAbstract
 using FlootyAbstract: AbstractMessage, AbstractPersistable, AbstractPersistenceBackend
 using FlootyBase: MessageItem
@@ -11,13 +13,19 @@ using FlootyStreams: OllamaMessage, OllamaToolCall, OllamaToolCallFunction
 import FlootyStreams
 using FlootyPTYLayer: ReplSession, startReplSession, agentWriteAndWait, closeSession!
 using StructTypes
-using JSON
+using JSON3
 import FlootyPersistence
 using FlootyPersistence: JSONBackend
 
 include("conversation.jl")          # per-session transcript (the app owns it)
 include("journal.jl")               # append-only event journal (SQLite now, Arrow later)
 include("flootyOllamaClient.jl")
+include("subscriptionStore.jl")
+include("subscriptions.jl")
+include("subscriptionCopilot.jl")
+include("subscriptionClaude.jl")
+include("subscriptionXai.jl")
+include("slashCommands.jl")
 include("promptDecision.jl")
 include("context.jl")                # model window, usage tracking, compaction
 include("flootyAgentTools.jl")
@@ -79,6 +87,8 @@ function __init__()
     # about models, so the agent side answers for them.
     FlootyPTYLayer.addAgentModelHooks!(agentModelState, selectAgentModel,
                                        selectMonitorModel)
+    FlootyPTYLayer.addSlashCommandHooks!(slashCommandCatalog, dispatchSlashCommand,
+                                        subscriptionUiAction)
     FlootyPTYLayer.addChatOnlyHandler!(chatSessionTurn!)
     FlootyPTYLayer.addNewChatHandler!(newChatSessionHandler)
     FlootyPTYLayer.addChatCloseHandler!(closeChatSession!)
@@ -190,6 +200,17 @@ function configureAgent!(; actorModel::Union{Nothing,AbstractString} = nothing,
     return cfg
 end
 
+function modelSessionForId(id::AbstractString)
+    logical = sessionForId(id)
+    logical isa Union{ChatSession,BrowserSession} && return logical
+    logical isa TerminalSession && logical.repl !== nothing && return logical.repl
+    return try
+        FlootyPTYLayer.sessionForTerminalId(String(id))
+    catch
+        nothing
+    end
+end
+
 """
     agentModelState(sessionId = "") :: NamedTuple(current, available)
 
@@ -199,11 +220,7 @@ id answers with the process default, which is what a tab that never chose one
 uses. Per-TAB models: two terminals can run different models at the same time.
 """
 function agentModelState(sessionId::AbstractString = "")
-    sess = try
-        FlootyPTYLayer.sessionForTerminalId(String(sessionId))
-    catch
-        nothing
-    end
+    sess = modelSessionForId(sessionId)
     cfg = sess === nothing ? AGENT_CONFIG[] : sessionModelConfig(sess)
     # Non-blocking: bindings run on the UI's main thread (see availableAgentModels).
     return (current = cfg.actorModel,
@@ -219,11 +236,7 @@ keeps its own model: the monitor runs short, frequent checks and is often better
 a different (cheaper or faster) model than the one driving the terminal.
 """
 function selectMonitorModel(name::AbstractString, sessionId::AbstractString = "")
-    sess = try
-        FlootyPTYLayer.sessionForTerminalId(String(sessionId))
-    catch
-        nothing
-    end
+    sess = modelSessionForId(sessionId)
     if sess === nothing
         configureAgent!(monitorModel = String(name))
     else
@@ -241,11 +254,7 @@ one already running keeps the model it began with. Without a session id this
 changes the process default (headless runs, and tabs that never chose one).
 """
 function selectAgentModel(name::AbstractString, sessionId::AbstractString = "")
-    sess = try
-        FlootyPTYLayer.sessionForTerminalId(String(sessionId))
-    catch
-        nothing
-    end
+    sess = modelSessionForId(sessionId)
     if sess === nothing
         # The monitor has its OWN picker now: choosing an agent model must not
         # silently overwrite an explicit monitor choice.
@@ -254,7 +263,7 @@ function selectAgentModel(name::AbstractString, sessionId::AbstractString = "")
         setSessionModel!(sess, String(name))
         # The tab's transcript is tagged with the model that produced it.
         try
-            conversationFor(sess).model = String(name)
+            conversationFor(sess isa ReplSession ? sess : sess.id).model = String(name)
         catch err
             @debug "selectAgentModel: conversation tag failed" exception = err
         end
@@ -298,12 +307,23 @@ store it module-side, and register it as the FlootySessions `repl` tool
 executor, replacing the in-process `Core.eval` fallback.
 
 Calling it twice closes and replaces the previous session.
+The optional FlootySessions package must be installed in the active environment.
+If it cannot load, the current session is left unchanged.
 """
 function activateReplTool!(; cmd::Cmd = DEFAULT_CMD,
                            timeout::Real = 60.0,
                            rows::Int = 24,
                            cols::Int = 80,
                            sidecarPath::AbstractString = DEFAULT_SIDECAR)
+    sessions = try
+        Base.require(Base.PkgId(UUID("963c42d5-230d-4615-aa6e-0698ef3b700d"),
+                                "FlootySessions"))
+    catch err
+        throw(ArgumentError("activateReplTool! requires the optional FlootySessions integration. " *
+                            "Install the genuine FlootySessions package and its dependencies " *
+                            "in the active Julia environment before activating the legacy REPL tool. " *
+                            sprint(showerror, err)))
+    end
     # Replace any previously active session (close the old one first).
     if ACTIVE_SESSION[] !== nothing
         try
@@ -318,7 +338,7 @@ function activateReplTool!(; cmd::Cmd = DEFAULT_CMD,
     sess = startReplSession(cmd; rows = rows, cols = cols,
                             sidecarPath = String(sidecarPath),
                             waitPrompt = waitPrompt)
-    FlootySessions.set_repl_executor!(makeExecutor(sess, Float64(timeout)))
+    Base.invokelatest(sessions.set_repl_executor!, makeExecutor(sess, Float64(timeout)))
     ACTIVE_SESSION[] = sess
     return sess
 end
@@ -346,7 +366,10 @@ function deactivateReplTool!()
         end
         ACTIVE_SESSION[] = nothing
     end
-    FlootySessions.REPL_EXECUTOR[] = nothing
+    sessions = get(Base.loaded_modules,
+                   Base.PkgId(UUID("963c42d5-230d-4615-aa6e-0698ef3b700d"), "FlootySessions"),
+                   nothing)
+    sessions === nothing || (sessions.REPL_EXECUTOR[] = nothing)
     return nothing
 end
 

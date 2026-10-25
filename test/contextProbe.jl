@@ -14,7 +14,7 @@ using Flooty: contextLengthFor, contextUsage, estimateTokens, compactMessages!,
     AGENT_SYSTEM_PROMPT
 using FlootyPTYLayer: startReplSession, closeSession!
 using FlootyStreams: OllamaMessage
-import JSON
+import JSON3
 
 failures = String[]
 function check(name::String, ok::Bool, detail = "")
@@ -97,7 +97,7 @@ try
     check("the prompt documents the compact action",
           occursin("{\"action\":\"compact\"}", AGENT_SYSTEM_PROMPT) &&
           occursin("CONTEXT BUDGET", AGENT_SYSTEM_PROMPT))
-    check("CompactAction parses", parseAction(JSON.parse("{\"action\":\"compact\"}")) isa
+    check("CompactAction parses", parseAction(JSON3.read("{\"action\":\"compact\"}")) isa
           CompactAction)
 
     # ---- 5: on-demand compaction ------------------------------------------

@@ -9,14 +9,14 @@
 # section "Self-contained app" (PackageCompiler.create_app).
 #
 # Usage:
-#   scripts/buildMacApp.sh                     # -> ~/Applications/FlootyAgent.app
-#   scripts/buildMacApp.sh --out /Applications  # -> /Applications/FlootyAgent.app
+#   scripts/buildMacApp.sh                     # -> ~/Applications/Flooty.app
+#   scripts/buildMacApp.sh --out /Applications  # -> /Applications/Flooty.app
 #   scripts/buildMacApp.sh --icon assets/flooty-icon.svg
 #   scripts/buildMacApp.sh --no-sign            # skip the ad-hoc codesign
 #
 # Env (defaults shown):
 #   FLOOTY_DEPOT=$HOME/.julia  FLOOTY_PROJECT=$FLOOTY_DEPOT/dev/Flooty
-#   FLOOTY_JULIA=$HOME/.juliaup/bin/julia   APP_NAME=FlootyAgent
+#   FLOOTY_JULIA=$HOME/.juliaup/bin/julia   APP_NAME=Flooty
 #   BUNDLE_ID=dev.flooty.agent
 set -euo pipefail
 
@@ -25,9 +25,9 @@ OUT_DIR="$HOME/Applications"
 ICON_SRC="$REPO/assets/flooty-icon.svg"
 SIGN=1
 IDENTITY=""
-APP_NAME="${APP_NAME:-FlootyAgent}"
+APP_NAME="${APP_NAME:-Flooty}"
 BUNDLE_ID="${BUNDLE_ID:-dev.flooty.agent}"
-DISPLAY_NAME="${DISPLAY_NAME:-Flooty Agent}"
+DISPLAY_NAME="${DISPLAY_NAME:-Flooty}"
 FLOOTY_DEPOT="${FLOOTY_DEPOT:-$HOME/.julia}"
 FLOOTY_PROJECT="${FLOOTY_PROJECT:-$FLOOTY_DEPOT/dev/Flooty}"
 FLOOTY_JULIA="${FLOOTY_JULIA:-$HOME/.juliaup/bin/julia}"
@@ -63,11 +63,20 @@ mkdir -p "$iconset"
 if [ "${ICON_SRC##*.}" = "png" ]; then
     cp "$ICON_SRC" "$work/base.png"
 else
-    # QuickLook renders SVG -> PNG (sips cannot read SVG).
-    qlmanage -t -s 1024 -o "$work" "$ICON_SRC" >/dev/null 2>&1
-    base="$work/$(basename "$ICON_SRC").png"
-    [ -f "$base" ] || { echo "could not render $ICON_SRC" >&2; exit 1; }
-    mv "$base" "$work/base.png"
+    # QuickLook adds an opaque background; AppKit preserves the SVG's alpha.
+    swift -e '
+import AppKit
+let input = CommandLine.arguments[1]
+let output = CommandLine.arguments[2]
+guard let image = NSImage(contentsOfFile: input),
+      let tiff = image.tiffRepresentation,
+      let bitmap = NSBitmapImageRep(data: tiff),
+      let png = bitmap.representation(using: .png, properties: [:]) else {
+    fputs("could not render \(input)\n", stderr)
+    exit(1)
+}
+try png.write(to: URL(fileURLWithPath: output))
+' "$ICON_SRC" "$work/base.png"
 fi
 for spec in "16 icon_16x16.png" "32 icon_16x16@2x.png" "32 icon_32x32.png" \
             "64 icon_32x32@2x.png" "128 icon_128x128.png" "256 icon_128x128@2x.png" \
