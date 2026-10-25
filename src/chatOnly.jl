@@ -47,8 +47,8 @@ function parseChatReply(reply::AbstractString)
         # A bare {"reply": …} carries no `action`; extractActionJson rightly
         # ignores it, but the chat contract accepts it as a prose wrapper.
         try
-            obj = JSON.parse(strip(raw))
-            obj isa JSON.Object && (act = obj)
+            obj = JSON3.read(strip(raw))
+            obj isa JSON3.Object && (act = obj)
         catch
         end
     end
@@ -166,8 +166,9 @@ function chatTurnFor!(sess::ChatSession, wv, text::AbstractString,
     noteUserMessage!(sess, text)
     conv = conversationOf(sess)
     recordTask!(conv, text)
+    cfg = sessionModelConfig(sess)
     try
-        conv.model = AGENT_CONFIG[].actorModel
+        conv.model = cfg.actorModel
     catch
     end
     setSessionStatus!(sess, "thinking")
@@ -175,7 +176,7 @@ function chatTurnFor!(sess::ChatSession, wv, text::AbstractString,
         try
             fn = CHAT_COMPLETE[]
             if fn === nothing
-                fn = makeCompleteFn(AGENT_CONFIG[], AGENT_CONFIG[].actorModel;
+                fn = makeCompleteFn(cfg, cfg.actorModel;
                     onThinking = chunk -> (wv === nothing ? nothing :
                         pushAgentEventToWindow(wv,
                             AgentThinkingEvent(sess.id, String(chunk)))))

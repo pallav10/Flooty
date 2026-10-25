@@ -29,6 +29,7 @@ function contextLengthFor(model::AbstractString;
     key = String(model) * "@" * String(baseUrl)
     override = tryparse(Int, get(ENV, "FLOOTY_CONTEXT_LENGTH", ""))
     override !== nothing && override > 0 && return override
+    subscriptionModel(model) === nothing || return DEFAULT_CONTEXT_LENGTH
     lock(CONTEXT_LENGTH_LOCK) do
         get(CONTEXT_LENGTH_CACHE, key, 0)
     end > 0 && return lock(CONTEXT_LENGTH_LOCK) do
@@ -49,7 +50,7 @@ function _queryContextLength(model::String, baseUrl::String)::Int
     # 1. Ollama native: POST /api/show
     try
         resp = HTTP.post(root * "/api/show", ["Content-Type" => "application/json"],
-                         JSON.json(Dict("model" => model));
+                         JSON3.write(Dict("model" => model));
                          readtimeout = 8000, retry = false)
         body = String(resp.body)
         # `model_info` carries one `<arch>.context_length` (e.g. beam.context_length)
@@ -157,7 +158,7 @@ function compactMessages!(messages::Vector{OllamaMessage};
             continue
         end
         if m.role == "assistant" && startswith(txt, "{")
-            action = try JSON.parse(txt) catch; nothing end
+            action = try JSON3.read(txt) catch; nothing end
             action isa AbstractDict || continue
             kind = string(get(action, "action", ""))
             if kind == "send"

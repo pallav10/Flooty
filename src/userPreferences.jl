@@ -161,12 +161,12 @@ Return an empty list when nothing durable was stated. Do not restate the message
         end
         raw = strip(stripThinking(reply))
         dec = try
-            JSON.parse(raw)
+            JSON3.read(raw)
         catch
             mt = match(r"\{.*\}s", raw)
-            mt === nothing ? nothing : try JSON.parse(mt.match) catch; nothing end
+            mt === nothing ? nothing : try JSON3.read(mt.match) catch; nothing end
         end
-        dec isa JSON.Object || begin
+        dec isa JSON3.Object || begin
             preferenceEvent!(sess, "observe — no structured preference")
             return nothing
         end

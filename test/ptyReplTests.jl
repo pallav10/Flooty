@@ -1,6 +1,5 @@
 using Flooty
 using Flooty: activateReplTool!, activeReplSession, deactivateReplTool!
-import FlootySessions
 import FlootyAbstract
 import FlootyPTYLayer
 
@@ -12,7 +11,9 @@ function check(name, cond)
 end
 
 # --- (1) happy path: executing "2 + 2" succeeds and output contains "4" ---
+# Activation must lazy-load the genuine integration before the test imports it.
 sess = activateReplTool!()
+import FlootySessions
 check("activate returns ReplSession", sess isa FlootyPTYLayer.ReplSession)
 check("activeReplSession matches", activeReplSession() === sess)
 check("REPL_EXECUTOR installed", FlootySessions.REPL_EXECUTOR[] !== nothing)

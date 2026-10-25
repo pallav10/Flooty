@@ -439,7 +439,7 @@ the reply carries none. Mapping (the parameter names those models use):
 
 The first recognized parameter wins; unknown names are ignored rather than guessed.
 """
-function extractProviderAction(text::AbstractString)::Union{Nothing,JSON.Object}
+function extractProviderAction(text::AbstractString)::Union{Nothing,JSON3.Object}
     text = stripInvisible(text)
     params = providerParameters(text)
     if isempty(params)
@@ -469,10 +469,10 @@ function extractProviderAction(text::AbstractString)::Union{Nothing,JSON.Object}
         end
         dict === nothing && continue
         # Return the SAME type the JSON path returns: every downstream helper
-        # (`getstr`, `get`) is written against a JSON.Object, and a plain Dict made
+        # (`getstr`, `get`) is written against a JSON3.Object, and a plain Dict made
         # the dispatch read an empty action ("unknown action ''" — the call was
         # translated and then silently dropped).
-        return JSON.parse(JSON.json(dict))
+        return JSON3.read(JSON3.write(dict))
     end
     return nothing
 end

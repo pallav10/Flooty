@@ -1,5 +1,5 @@
 using Flooty
-import JSON
+import JSON3
 
 # extractActionJson must find the action object even when the model wraps it
 # in prose that itself contains brace characters (the exact failure shape seen
@@ -17,7 +17,7 @@ assertCond(r !== nothing && String(r[:action]) == "done", "prose-brace-before-js
 # 2. Clean single-object replies still work.
 r = Flooty.extractActionJson(
     "{\"action\":\"send\",\"code\":\"println(1+1)\"}")
-assertCond(r !== nothing && String(r[:action]) == "send", "clean-json")
+assertCond(r isa JSON3.Object && String(r[:action]) == "send", "clean-json")
 
 # 3. Markdown-fenced JSON.
 r = Flooty.extractActionJson(
@@ -90,5 +90,14 @@ r = Flooty.extractActionJson(grepReply)
 assertCond(r !== nothing && String(r[:action]) == "send", "raw-quote-grep")
 assertCond(occursin("ALPHA_LO", String(r[:code])) &&
            occursin("src/", String(r[:code])), "raw-quote-grep-code")
+
+# 15. Lazy JSON3 strings inside nested objects/arrays must still reach repair.
+r = Flooty.extractActionJson(
+    "{\"action\":\"done\",\"meta\":{\"steps\":[{\"keys\":\"\\x11\"}]}}")
+assertCond(r isa JSON3.Object && String(r[:meta][:steps][1][:keys]) == "\x11",
+           "nested-invalid-escape-repaired")
+r = Flooty.extractActionJson(
+    "{\"action\":\"done\",\"meta\":{\"steps\":[{\"keys\":\"\\uZZZZ\"}]}}")
+assertCond(r === nothing, "nested-invalid-unicode-rejected")
 
 println("EXTRACT_ACTION_PROBE_OK")

@@ -4,34 +4,36 @@ version = "0.1.0"
 authors = ["Arhik <arhik23@gmail.com>"]
 
 [deps]
+Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 BufferedStreams = "e1450e63-4bb3-523b-b2a4-4ffa8c0fd77d"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 FlootyAbstract = "cebe1fc3-b0aa-42c6-ad50-daf6444249a8"
 FlootyBase = "d7457f72-71a4-4f9c-bcc7-a89b19590879"
 FlootyPTYLayer = "c5102509-7890-4b11-b871-c99182d1d95f"
 FlootyPersistence = "fef2fbbe-16ef-428b-8433-3c3d4a0a1e42"
-FlootySessions = "963c42d5-230d-4615-aa6e-0698ef3b700d"
 FlootyStreams = "6174e9c5-3b68-4377-bc3a-426e3f12d78b"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
-WebIO = "0f1e0344-ec1d-5b48-a673-e5cf874b6c29"
+
+[weakdeps]
+FlootySessions = "963c42d5-230d-4615-aa6e-0698ef3b700d"
 
 [sources]
 FlootyAbstract = {path = "../FlootyAbstract"}
 FlootyBase = {path = "../FlootyBase"}
 FlootyPTYLayer = {path = "../FlootyPTYLayer"}
 FlootyPersistence = {path = "../FlootyPersistence"}
-FlootySessions = {path = "../FlootySessions"}
 FlootyStreams = {path = "../FlootyStreams"}
-WebIO = {path = "/Users/arhik/.julia/dev/WebIO"}
 
 [compat]
 BufferedStreams = "1.2.2"
 HTTP = "1.11.0"
-JSON = "1"
+JSON3 = "1.14.3"
 Logging = "1.11.0"
 StructTypes = "1.11.1"
 julia = "1.10"

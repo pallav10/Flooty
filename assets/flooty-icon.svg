@@ -1,21 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Flooty — Peek</title>
+  <desc id="desc">A friendly cream puppy resting its paws on a violet terminal, on a warm apricot app tile.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1b1b22"/>
-      <stop offset="1" stop-color="#0d0d12"/>
-    </linearGradient>
-    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#c56cf0"/>
-      <stop offset="1" stop-color="#7a5af8"/>
-    </linearGradient>
+    <linearGradient id="tile" x2="0.2" y2="1"><stop stop-color="#f5ba94"/><stop offset="1" stop-color="#d77b72"/></linearGradient>
+    <linearGradient id="fur" x2="0.2" y2="1"><stop stop-color="#fff6df"/><stop offset="1" stop-color="#f4d4a8"/></linearGradient>
+    <linearGradient id="screen" x2="0.4" y2="1"><stop stop-color="#3d3b65"/><stop offset="1" stop-color="#23263e"/></linearGradient>
+    <linearGradient id="ear" x2="0" y2="1"><stop stop-color="#be8459"/><stop offset="1" stop-color="#8b5945"/></linearGradient>
   </defs>
-  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
-  <rect x="150" y="230" width="724" height="564" rx="64" fill="#14141a"
-        stroke="#2e2e3a" stroke-width="8"/>
-  <circle cx="220" cy="292" r="14" fill="#ff5f57"/>
-  <circle cx="270" cy="292" r="14" fill="#febc2e"/>
-  <circle cx="320" cy="292" r="14" fill="#28c840"/>
-  <path d="M 250 400 L 360 500 L 250 600" fill="none" stroke="url(#glow)"
-        stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="410" y="566" width="240" height="40" rx="20" fill="url(#glow)" opacity="0.9"/>
+  <rect x="64" y="76" width="896" height="884" rx="200" fill="#7e4548" opacity=".22"/>
+  <rect x="64" y="64" width="896" height="884" rx="200" fill="url(#tile)"/>
+  <rect x="72" y="72" width="880" height="868" rx="193" fill="none" stroke="#fff6e6" stroke-opacity=".3" stroke-width="4"/>
+  <ellipse cx="512" cy="800" rx="305" ry="38" fill="#8c4c55" opacity=".25"/>
+  <path d="M370 252 C298 241 250 315 247 419 C246 484 277 514 309 500 Q348 482 364 410 L405 310 Z" fill="url(#ear)"/>
+  <path d="M654 252 C726 241 774 315 777 419 C778 484 747 514 715 500 Q676 482 660 410 L619 310 Z" fill="url(#ear)"/>
+  <path d="M512 215 C626 215 693 297 690 410 Q724 487 665 548 Q611 590 512 586 Q413 590 359 548 Q300 487 334 410 C331 297 398 215 512 215 Z" fill="url(#fur)"/>
+  <path d="M471 235 Q488 204 516 205 Q509 222 519 239 Q539 218 558 226" fill="none" stroke="#fff6df" stroke-width="22" stroke-linecap="round"/>
+  <ellipse cx="423" cy="396" rx="25" ry="32" fill="#352d31"/>
+  <ellipse cx="601" cy="396" rx="25" ry="32" fill="#352d31"/>
+  <circle cx="416" cy="386" r="8" fill="#fff9ee"/>
+  <circle cx="594" cy="386" r="8" fill="#fff9ee"/>
+  <ellipse cx="465" cy="476" rx="60" ry="43" fill="#fff8e9"/>
+  <ellipse cx="559" cy="476" rx="60" ry="43" fill="#fff8e9"/>
+  <path d="M479 443 Q512 431 545 443 Q550 453 538 465 L524 476 Q512 483 500 476 L486 465 Q474 453 479 443 Z" fill="#3c3033"/>
+  <path d="M490 505 Q512 518 534 505 L534 519 Q533 544 512 544 Q491 544 490 519 Z" fill="#e99b96"/>
+  <path d="M512 480 L512 491 M467 489 Q488 515 512 491 Q536 515 557 489" fill="none" stroke="#604139" stroke-width="10" stroke-linecap="round"/>
+  <rect x="197" y="551" width="630" height="246" rx="53" fill="#684c58" opacity=".35"/>
+  <rect x="197" y="531" width="630" height="246" rx="53" fill="url(#screen)" stroke="#f9dbbc" stroke-width="7"/>
+  <path d="M230 593 H794" fill="none" stroke="#f9dbbc" stroke-opacity=".16" stroke-width="4"/>
+  <circle cx="250" cy="565" r="8" fill="#ffa58f"/>
+  <circle cx="281" cy="565" r="8" fill="#ffd28c"/>
+  <circle cx="312" cy="565" r="8" fill="#a5e1cc"/>
+  <path d="M295 634 L340 674 L295 714 M386 714 H454" fill="none" stroke="#abe9d8" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M329 510 Q360 484 392 510 Q414 529 411 563 Q408 590 370 591 Q331 592 328 565 Z" fill="url(#fur)"/>
+  <path d="M632 510 Q664 484 695 510 L696 565 Q693 592 654 591 Q616 590 613 563 Q610 529 632 510 Z" fill="url(#fur)"/>
+  <path d="M352 565 V578 M378 565 V578 M639 565 V578 M665 565 V578" fill="none" stroke="#d4ab83" stroke-width="6" stroke-linecap="round"/>
 </svg>
